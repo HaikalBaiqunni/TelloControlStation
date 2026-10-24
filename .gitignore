@@ -1,0 +1,29 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+
+# PyTorch / Ultralytics weights (auto-downloaded on first run)
+*.pt
+*.onnx
+
+# Temporary & Log files
+*.log
+run_output.txt
+
+# Editor / OS settings
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
