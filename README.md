@@ -6,6 +6,28 @@ Designed with an **Ace Combat / Modern Fighter Jet Glass Cockpit** aesthetic, fe
 
 ---
 
+## 🎬 Live Demo
+
+![Tello Control Station – Animated Demo](assets/screenshots/demo.gif)
+
+---
+
+## 📸 Screenshots
+
+| HUD Standby | Airborne Flight HUD |
+|:-----------:|:-------------------:|
+| ![HUD Standby](assets/screenshots/01_hud_standby.png) | ![Airborne HUD + Telemetry](assets/screenshots/02_hud_airborne.png) |
+
+| AI Object & Person Detection | Attitude Sparkline Graphs |
+|:---------------------------:|:------------------------:|
+| ![AI Detection](assets/screenshots/03_ai_detection.png) | ![Attitude Graphs](assets/screenshots/04_attitude_graphs.png) |
+
+| Tactical Radar + Waypoint Planner | Person Target Lock |
+|:---------------------------------:|:------------------:|
+| ![Radar + Waypoints](assets/screenshots/05_radar_waypoints.png) | ![Person Lock-On](assets/screenshots/06_person_lock.png) |
+
+---
+
 ## ⚡ Key Features
 
 - **🛩️ 100% Full-Bleed Ace Combat Jet Fighter HUD**:
@@ -95,6 +117,8 @@ pip install -r requirements.txt
 1. Power on your Ryze Tello drone.
 2. Connect your PC's Wi-Fi adapter (or secondary USB Wi-Fi dongle) to the drone's SSID (e.g. `TELLO-XXXXXX`).
 
+> **Dual Wi-Fi Tip**: If you need internet while flying, connect your primary Wi-Fi to your router and use a USB Wi-Fi dongle (e.g. TP-Link Nano) exclusively for the Tello AP. The GCS will send UDP commands through the correct interface automatically.
+
 ### 3. Launch the Cockpit
 ```bash
 python main.py
@@ -112,6 +136,10 @@ TelloControlStation/
 ├── main.py                          # Application entry point
 ├── requirements.txt                 # Dependencies (PySide6, opencv, numpy, pygame, ultralytics)
 ├── run.bat                          # One-click Windows launcher
+├── assets/
+│   └── screenshots/                 # UI screenshots & animated demo GIF
+├── scripts/
+│   └── gen_screenshots.py           # Generates all README screenshots & demo.gif
 ├── src/
 │   ├── drone/
 │   │   ├── tello_sdk.py             # UDP Socket wrapper for Tello SDK 1.3

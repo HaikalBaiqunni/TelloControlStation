@@ -27,3 +27,6 @@ run_output.txt
 .idea/
 .DS_Store
 Thumbs.db
+
+# Screenshot cache (source images, not output)
+assets/screenshots/_cache/
