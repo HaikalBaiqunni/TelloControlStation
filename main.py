@@ -14,6 +14,13 @@ import os
 # Ensure the project root is on the path so 'src.*' imports resolve correctly
 sys.path.insert(0, os.path.dirname(__file__))
 
+# ── Suppress noisy FFmpeg / OpenCV H.264 decoder warnings ────────────────────
+# The Tello stream produces harmless "non-existing PPS" / "decode_slice_header"
+# messages on every startup until the decoder receives its first keyframe.
+# Setting OPENCV_FFMPEG_LOGLEVEL to quiet suppresses them without hiding real errors.
+os.environ.setdefault("OPENCV_FFMPEG_LOGLEVEL", "quiet")
+os.environ.setdefault("OPENCV_LOG_LEVEL", "ERROR")
+
 from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QIcon

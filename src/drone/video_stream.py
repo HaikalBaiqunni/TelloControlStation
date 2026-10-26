@@ -11,6 +11,7 @@ Architecture:
   - Caller connects frame_ready to the camera widget's update slot
 """
 
+import os
 import threading
 import time
 from typing import Optional
@@ -18,6 +19,16 @@ from typing import Optional
 import cv2
 import numpy as np
 from PySide6.QtCore import QObject, Signal
+
+# Suppress FFmpeg/H.264 decoder noise (PPS errors, decode_slice_header) from stderr.
+# These are harmless cosmetic warnings during stream initialisation.
+os.environ.setdefault("OPENCV_FFMPEG_LOGLEVEL", "quiet")
+os.environ.setdefault("OPENCV_LOG_LEVEL", "ERROR")
+# setLogLevel is available only in some opencv builds — suppress gracefully
+try:
+    cv2.setLogLevel(cv2.LOG_LEVEL_ERROR)      # available since OpenCV 4.5
+except AttributeError:
+    pass
 
 
 class VideoStreamThread(QObject):
