@@ -4,7 +4,7 @@ A next-generation desktop Ground Control Station (GCS) for the **Ryze Tello** (N
 
 Designed with an **Ace Combat / Modern Fighter Jet Glass Cockpit** aesthetic, featuring real-time AI object/person tracking, a live flight-data trace, and a Mission-Planner-style **waypoint planner with autonomous mission execution and live progress tracking**.
 
-> **UI v2 (glass cockpit + mission control).** The app now has three pages: **FLIGHT DATA** (video + fighter HUD + live mission map), **FLIGHT PLAN** (waypoint planner) and **LOGS**. The screenshots/GIF below still show the previous UI until `scripts/gen_screenshots.py` is re-run.
+The app has three pages: **FLIGHT DATA** (video + fighter HUD + live mission map), **FLIGHT PLAN** (waypoint planner) and **LOGS**.
 
 ---
 
@@ -20,13 +20,19 @@ Designed with an **Ace Combat / Modern Fighter Jet Glass Cockpit** aesthetic, fe
 |:-----------:|:-------------------:|
 | ![HUD Standby](assets/screenshots/01_hud_standby.png) | ![Airborne HUD + Telemetry](assets/screenshots/02_hud_airborne.png) |
 
-| AI Object & Person Detection | Attitude Sparkline Graphs |
-|:---------------------------:|:------------------------:|
-| ![AI Detection](assets/screenshots/03_ai_detection.png) | ![Attitude Graphs](assets/screenshots/04_attitude_graphs.png) |
+| AI Object & Person Detection | Flight Data Trace |
+|:---------------------------:|:-----------------:|
+| ![AI Detection](assets/screenshots/03_ai_detection.png) | ![Flight Data](assets/screenshots/04_flight_data.png) |
 
-| Tactical Radar + Waypoint Planner | Person Target Lock |
-|:---------------------------------:|:------------------:|
-| ![Radar + Waypoints](assets/screenshots/05_radar_waypoints.png) | ![Person Lock-On](assets/screenshots/06_person_lock.png) |
+| Live Mission (✓ done / ▶ active / ○ pending) | Flight Plan (waypoint planner) |
+|:--------------------------------------------:|:------------------------------:|
+| ![Live Mission](assets/screenshots/05_live_mission.png) | ![Flight Plan](assets/screenshots/07_flight_plan.png) |
+
+| Person Target Lock |
+|:------------------:|
+| ![Person Lock-On](assets/screenshots/06_person_lock.png) |
+
+> The screenshots and GIF use simulated telemetry and generated stand-in video frames. Re-create them with `python scripts/gen_screenshots.py` (add `--download` to use real sample photos instead).
 
 ---
 
@@ -137,6 +143,14 @@ python main.py
 .\run.bat
 ```
 4. Click **`⚡ UPLINK`** in the bottom Action Deck to connect and initialize the video stream!
+
+### 4. Fly a waypoint mission
+1. Open **FLIGHT PLAN** (tab or `M`). Click the map to add waypoints, edit cells in the table, or use a pattern (Orbit / Square / Grid scan). Set default altitude, speed and geofence in the left panel.
+2. Check the altitude profile and the estimates (path, time, battery). Waypoints outside the geofence block the start. Save the plan with **SAVE** if you want to reuse it.
+3. Connect (`⚡ UPLINK`), then press **`▶ START MISSION`**. If the drone is on the ground the mission's `TAKEOFF` item launches it; if it is already flying it continues from the current position.
+4. Watch it on **FLIGHT DATA**: the live map and the progress strip show which waypoints are done, which one is active and the remaining distance/ETA. `SKIP WP` and `ABORT` take effect between commands; `⚠ CUTOFF` / `Esc` stops the motors immediately.
+
+> **Safety:** the position is dead-reckoned (no GPS) and drifts. Fly in an open, empty area with short legs first, keep your hand on `Esc`/`⚠ CUTOFF`, and use `⌖ RESET HOME` to re-anchor the local frame when the drone is at your Home point.
 
 ---
 

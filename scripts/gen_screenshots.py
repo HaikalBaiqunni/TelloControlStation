@@ -2,13 +2,17 @@
 scripts/gen_screenshots.py
 Generate marketing screenshots + animated GIF for README.
 
-Renders 6 demo frames:
+Renders 7 demo frames:
   1. HUD Standby (no drone)
   2. Connected + Flight HUD overlay (simulated telemetry)
   3. AI Object & Person Detection (with YOLO brackets)
-  4. Attitude Sparkline Graphs
-  5. Tactical Radar + Waypoint Mission Planner
+  4. Flight Data trace
+  5. Live mission map + progress strip
   6. Person Target Lock
+  7. Flight Plan page (waypoint planner)
+
+By default the video frames are generated locally (no network). Pass --download to use
+real sample photos from Unsplash instead.
 
 Output: assets/screenshots/  *.png + demo.gif
 """
@@ -59,6 +63,102 @@ def download_samples():
             img = cv2.resize(img, (1280, 720))
             frames[name.replace(".jpg", "")] = img
     return frames
+
+
+def make_frames():
+    """Procedurally generated stand-in FPV scenes (1280x720 BGR), so no download is needed."""
+    import cv2
+    rng = np.random.default_rng(7)
+    W, H = 1280, 720
+
+    def noise(img, amt=6):
+        n = rng.normal(0, amt, img.shape).astype(np.int16)
+        return np.clip(img.astype(np.int16) + n, 0, 255).astype(np.uint8)
+
+    def vgrad(top, bottom):
+        t = np.linspace(0, 1, H)[:, None, None]
+        row = (np.array(top) * (1 - t) + np.array(bottom) * t).astype(np.uint8)
+        return np.repeat(row, W, axis=1)
+
+    frames = {}
+
+    # city: dusk sky + skyline with lit windows
+    img = vgrad((120, 80, 50), (60, 70, 90))
+    horizon = int(H * 0.62)
+    for _ in range(60):
+        bw, bh = int(rng.integers(50, 150)), int(rng.integers(120, 380))
+        bx = int(rng.integers(-20, W))
+        shade = int(rng.integers(25, 60))
+        cv2.rectangle(img, (bx, horizon - bh), (bx + bw, horizon + 40), (shade, shade + 6, shade + 14), -1)
+        for wy in range(horizon - bh + 10, horizon, 18):
+            for wx in range(bx + 8, bx + bw - 8, 16):
+                if rng.random() < 0.35:
+                    cv2.rectangle(img, (wx, wy), (wx + 6, wy + 8), (90, 190, 240), -1)
+    cv2.rectangle(img, (0, horizon + 30), (W, H), (35, 38, 42), -1)
+    for x in range(-W, 2 * W, 140):
+        cv2.line(img, (W // 2, horizon + 30), (x, H), (70, 74, 80), 2)
+    frames["city_aerial"] = noise(cv2.GaussianBlur(img, (3, 3), 0))
+
+    # forest from above
+    img = np.full((H, W, 3), (40, 90, 50), np.uint8)
+    for _ in range(900):
+        c = (int(rng.integers(20, 70)), int(rng.integers(70, 150)), int(rng.integers(30, 80)))
+        cv2.circle(img, (int(rng.integers(0, W)), int(rng.integers(0, H))), int(rng.integers(14, 44)), c, -1)
+    frames["forest_top"] = noise(cv2.GaussianBlur(img, (9, 9), 0))
+
+    # office: wall, desk, laptop, chair
+    img = vgrad((190, 185, 175), (150, 140, 130))
+    cv2.rectangle(img, (0, 470), (W, H), (70, 95, 130), -1)
+    cv2.rectangle(img, (160, 380), (700, 420), (60, 80, 110), -1)
+    cv2.rectangle(img, (260, 280), (560, 380), (50, 50, 55), -1)
+    cv2.rectangle(img, (275, 292), (545, 372), (200, 170, 120), -1)
+    cv2.rectangle(img, (830, 300), (980, 420), (45, 45, 50), -1)
+    cv2.rectangle(img, (810, 420), (1000, 450), (45, 45, 50), -1)
+    cv2.line(img, (905, 450), (905, 560), (40, 40, 40), 8)
+    frames["office"] = noise(cv2.GaussianBlur(img, (5, 5), 0))
+
+    # person: studio wall + large silhouette
+    img = vgrad((150, 120, 90), (110, 90, 70))
+    cv2.ellipse(img, (640, 220), (80, 100), 0, 0, 360, (140, 170, 210), -1)
+    cv2.rectangle(img, (500, 310), (780, 720), (70, 60, 120), -1)
+    cv2.circle(img, (500, 380), 45, (70, 60, 120), -1)
+    cv2.circle(img, (780, 380), 45, (70, 60, 120), -1)
+    frames["person"] = noise(cv2.GaussianBlur(img, (7, 7), 0))
+
+    # runway: asphalt in perspective under a bright sky
+    img = vgrad((235, 200, 150), (200, 215, 225))
+    hz = int(H * 0.45)
+    cv2.rectangle(img, (0, hz), (W, H), (60, 120, 70), -1)
+    cv2.fillPoly(img, [np.array([(W // 2 - 30, hz), (W // 2 + 30, hz), (W - 80, H), (80, H)])], (70, 70, 74))
+    for k in range(10):
+        t0, t1 = k / 10, (k + 0.5) / 10
+        y0, y1 = int(hz + (H - hz) * t0 ** 1.6), int(hz + (H - hz) * t1 ** 1.6)
+        w0, w1 = 2 + 18 * t0 ** 1.6, 2 + 18 * t1 ** 1.6
+        cv2.fillPoly(img, [np.array([(W // 2 - w0, y0), (W // 2 + w0, y0), (W // 2 + w1, y1), (W // 2 - w1, y1)], np.int32)],
+                     (230, 230, 235))
+    frames["runway"] = noise(cv2.GaussianBlur(img, (3, 3), 0))
+    return frames
+
+
+def mission_progress(win, u: float):
+    """Place the drone `u` (0..1) along the planned path and advance the active waypoint."""
+    from src.drone.mission import cumulative, bearing_deg
+
+    items = win._model.items
+    cum, total = cumulative(items)
+    s = u * total
+    for i in range(1, len(items)):
+        if s <= cum[i] or i == len(items) - 1:
+            seg = cum[i] - cum[i - 1]
+            f = (s - cum[i - 1]) / seg if seg > 0 else 1.0
+            a, b = items[i - 1], items[i]
+            win._pose.x = a.x + (b.x - a.x) * f
+            win._pose.y = a.y + (b.y - a.y) * f
+            win._pose.yaw = bearing_deg(a, b) if seg > 1 else win._pose.yaw
+            win._pose.trail.append((win._pose.x, win._pose.y))
+            win._model.set_target(i)
+            break
+    win._ui_tick()
 
 
 def pump(n: int = 20):
@@ -144,8 +244,12 @@ def main():
     app = QApplication.instance() or QApplication(sys.argv)
     app.setStyle("Fusion")
 
-    print("[1/3] Downloading sample aerial images ...")
-    frames = download_samples()
+    if "--download" in sys.argv:
+        print("[1/3] Downloading sample photos ...")
+        frames = download_samples()
+    else:
+        print("[1/3] Generating local sample frames ...")
+        frames = make_frames()
     print(f"  Loaded {len(frames)} frames: {list(frames.keys())}")
 
     print("\n[2/3] Generating screenshots ...")
@@ -186,14 +290,14 @@ def main():
     saved_paths.append(save_png(grab_window(win), "03_ai_detection.png"))
 
     # ── Shot 4: Attitude / Sparkline Graphs ──────────────────────────────────
-    print("  Shot 4/6: Attitude Sparkline Graphs ...")
+    print("  Shot 4/6: Flight Data trace ...")
     if "forest_top" in frames:
         win._cam.set_frame(frames["forest_top"])
     win._cam.set_detections([])
     for i in range(130):
         inject_telemetry(win, i * 0.12)
     pump(30)
-    saved_paths.append(save_png(grab_window(win), "04_attitude_graphs.png"))
+    saved_paths.append(save_png(grab_window(win), "04_flight_data.png"))
 
     # ── Shot 5: Tactical Radar + Waypoints ───────────────────────────────────
     print("  Shot 5/6: Live mission map + progress ...")
@@ -202,7 +306,7 @@ def main():
     inject_waypoints(win)
     inject_telemetry(win, 22.0)
     pump(30)
-    saved_paths.append(save_png(grab_window(win), "05_radar_waypoints.png"))
+    saved_paths.append(save_png(grab_window(win), "05_live_mission.png"))
 
     # ── Shot 5b: Flight Plan page ────────────────────────────────────────────
     print("  Shot 5b: Flight Plan page ...")
@@ -226,14 +330,19 @@ def main():
     saved_paths.append(save_png(grab_window(win), "06_person_lock.png"))
 
     # ── GIF: Animated demo (32 frames) ──────────────────────────────────────
-    print("\n[3/3] Building animated GIF (32 frames) ...")
+    print("\n[3/3] Building animated GIF (42 frames) ...")
     gif_frames = []
+    N_FLY, N_MISSION = 36, 24          # frames on the FLIGHT DATA page / where the mission starts
 
     if "city_aerial" in frames:
         win._cam.set_frame(frames["city_aerial"])
     win._cam.set_detections([])
+    inject_waypoints(win)               # load the demo plan, then rewind it to "ready"
+    win._model.set_state(win._model.IDLE)
+    win._pose.reset()
+    win._goto(win.FLY)
 
-    for fi in range(32):
+    for fi in range(42):
         t = fi * 0.38
 
         # Sequence transitions
@@ -246,18 +355,28 @@ def main():
         elif fi == 17 and "city_aerial" in frames:
             win._cam.set_frame(frames["city_aerial"])
             win._cam.set_detections([])
-        elif fi == 24 and "runway" in frames:
+        elif fi == N_MISSION and "runway" in frames:
             win._cam.set_frame(frames["runway"])
-            inject_waypoints(win)
             win._cam.set_detections([])
+            win._pose.reset()
+            win._model.set_state(win._model.RUNNING)
+
+        if N_MISSION <= fi < N_FLY:
+            mission_progress(win, 0.06 + (fi - N_MISSION) * 0.08)
+        elif fi == N_FLY:
+            win._model.set_state(win._model.IDLE)
+            win._goto(win.PLAN)
+        if fi >= N_FLY:
+            win._model.select(1 + (fi - N_FLY) % (len(win._model.items) - 1))
 
         inject_telemetry(win, t + 5)
         pump(6)
 
         pil_frame = pix_to_pil(grab_window(win))
-        pil_frame = pil_frame.resize((960, 540), Image.LANCZOS)
+        pil_frame = pil_frame.resize((800, 450), Image.LANCZOS)
+        pil_frame = pil_frame.quantize(colors=96, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE)
         gif_frames.append(pil_frame)
-        print(f"  GIF frame {fi + 1}/32 ✓")
+        print(f"  GIF frame {fi + 1}/42 ok")
 
     gif_path = os.path.join(ASSETS_DIR, "demo.gif")
     gif_frames[0].save(
@@ -273,7 +392,7 @@ def main():
 
     win.close()
 
-    print("\n✅ Done!")
+    print("\nDone!")
     for p in saved_paths:
         print(f"   {p}")
     print(f"   {gif_path}")
