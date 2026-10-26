@@ -11,12 +11,14 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import QWidget
 
 
-C_BG      = QColor(0x0a, 0x10, 0x20, 0xcc)
-C_BORDER  = QColor(0x1e, 0x3d, 0x5a)
-C_CROSS   = QColor(0x1a, 0x2a, 0x3a)
-C_DOT     = QColor(0x00, 0xd4, 0xff)
-C_DOT_GLO = QColor(0x00, 0xd4, 0xff, 0x80)
-C_LABEL   = QColor(0x3a, 0x5a, 0x7a)
+from src.ui import theme
+
+C_BG      = QColor(0x08, 0x11, 0x1a, 0xcc)
+C_BORDER  = theme.rgba(theme.ACCENT, 0x70)
+C_CROSS   = theme.rgba(theme.ACCENT, 0x30)
+C_DOT     = theme.ACCENT
+C_DOT_GLO = theme.rgba(theme.ACCENT, 0x80)
+C_LABEL   = theme.MUTED
 
 
 class RCStickWidget(QWidget):

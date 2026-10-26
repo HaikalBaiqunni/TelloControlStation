@@ -17,16 +17,17 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import QWidget
 
+from src.ui import theme
 
-HUD_GREEN     = QColor(0x55, 0xff, 0x99)
-HUD_GREEN_DIM = QColor(0x30, 0xaa, 0x60, 0x88)
-HUD_GLASS_BG  = QColor(0x06, 0x16, 0x0e, 0xbf)   # Frosted glass
-HUD_BORDER    = QColor(0x33, 0xbb, 0x66, 0x90)
-HUD_HEADER_BG = QColor(0x0d, 0x28, 0x18, 0x99)
+HUD_GREEN     = theme.ACCENT
+HUD_GREEN_DIM = theme.rgba(theme.ACCENT, 0x88)
+HUD_GLASS_BG  = theme.GLASS_BG                   # Frosted glass
+HUD_BORDER    = theme.GLASS_BORDER
+HUD_HEADER_BG = QColor(0x0d, 0x1c, 0x2a, 0x99)
 
-LOG_OK   = QColor(0x55, 0xff, 0x99)
-LOG_WARN = QColor(0xff, 0xbb, 0x33)
-LOG_ERR  = QColor(0xff, 0x44, 0x55)
+LOG_OK   = theme.OK
+LOG_WARN = theme.WARN
+LOG_ERR  = theme.ALERT
 
 
 class FlightLogPanel(QWidget):
@@ -39,7 +40,8 @@ class FlightLogPanel(QWidget):
 
     def __init__(self, parent=None, width: int = 330, height: int = 145):
         super().__init__(parent)
-        self.setFixedSize(width, height)
+        if width and height:
+            self.setFixedSize(width, height)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground, True)
         self._entries: List[Tuple[str, str, str]] = []
@@ -111,10 +113,11 @@ class FlightLogPanel(QWidget):
         painter.drawEllipse(QPointF(W - 16, 12), 3, 3)
 
         # 4. Log Entries
-        visible = self._entries[-self.MAX_VISIBLE:]
-        start_y = header_h + 4
         avail_h = H - header_h - 8
-        line_h = avail_h / max(1, self.MAX_VISIBLE)
+        rows = self.MAX_VISIBLE if self.minimumHeight() == self.maximumHeight() else max(3, int(avail_h // 20))
+        visible = self._entries[-rows:]
+        start_y = header_h + 4
+        line_h = avail_h / max(1, rows)
 
         font_time = QFont("Consolas", 8)
         font_msg  = QFont("Bahnschrift", 9)

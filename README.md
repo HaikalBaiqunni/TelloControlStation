@@ -2,7 +2,9 @@
 
 A next-generation desktop Ground Control Station (GCS) for the **Ryze Tello** (Non-EDU) drone built with **Python**, **PySide6 (Qt6)**, **OpenCV**, and **YOLOv8**.
 
-Designed with an **Ace Combat / Modern Fighter Jet Glass Cockpit** aesthetic, featuring real-time AI object/person tracking, in-HUD rolling telemetry oscilloscopes, and an interactive tactical radar waypoint mission planner.
+Designed with an **Ace Combat / Modern Fighter Jet Glass Cockpit** aesthetic, featuring real-time AI object/person tracking, a live flight-data trace, and a Mission-Planner-style **waypoint planner with autonomous mission execution and live progress tracking**.
+
+> **UI v2 (glass cockpit + mission control).** The app now has three pages: **FLIGHT DATA** (video + fighter HUD + live mission map), **FLIGHT PLAN** (waypoint planner) and **LOGS**. The screenshots/GIF below still show the previous UI until `scripts/gen_screenshots.py` is re-run.
 
 ---
 
@@ -30,13 +32,13 @@ Designed with an **Ace Combat / Modern Fighter Jet Glass Cockpit** aesthetic, fe
 
 ## ⚡ Key Features
 
-- **🛩️ 100% Full-Bleed Ace Combat Jet Fighter HUD**:
-  - Fluorescent emerald vector canopy (`#55ff99`) with zero clunky opaque docks.
-  - Dynamic rotating & shifting Pitch Ladder (solid bars for positive, dashed for negative).
+- **🛩️ Full-Bleed Glass Cockpit + Fighter HUD**:
+  - Translucent glass panels with glowing corner brackets over the FPV video (cyan theme, see `src/ui/theme.py`).
+  - Dynamic rotating & shifting Pitch Ladder (solid bars for positive, dashed for negative) and a bank scale.
   - Center Aircraft Watermark flight path reticle (`-\v/-`).
-  - Vertical Speed Ladder Tape (`SPEED >`) and Altitude Ladder Tape (`< ALT`).
-  - Top Horizontal Linear Heading Compass Ribbon with caret pointer.
-  - Tactical Military Radio Transmission Banner.
+  - **Scrolling** Speed tape (cm/s) and Altitude tape (cm) with readout chevrons.
+  - Top Horizontal Linear Heading Compass Ribbon with numeric heading.
+  - Mission line (`WP 2/5  DIST 2.8 M  ETA 00:28`), radio banner and flashing **master caution** (low battery / geofence breach).
 
 - **🎯 Real-Time AI Object & Human Tracking (YOLOv8)**:
   - Powered by asynchronous background YOLOv8 inference with zero video latency.
@@ -44,17 +46,23 @@ Designed with an **Ace Combat / Modern Fighter Jet Glass Cockpit** aesthetic, fe
   - **Object Target Lock**: Tactical amber brackets with `[ 🎯 OBJ // <LABEL> ]` for everyday items (chairs, bottles, laptops, etc.).
   - One-click toggle (`[🎯 AI TRACK: ON/OFF]` or hotkey `O`).
 
-- **📊 In-HUD Micro-Sparklines & Telemetry Oscilloscopes**:
-  - `// SPEED PROFILE`: Real-time rolling wave graph (0–80 cm/s).
-  - `// ALT PROFILE`: Real-time altitude profile (0–200 cm).
-  - `// ATTITUDE`: 3-channel live waveforms for **Pitch** (green), **Roll** (cyan), and **Yaw** (amber).
-  - One-click toggle (`[📈 PLOTS: ON/OFF]` or hotkey `P`).
+- **📊 FLIGHT DATA card**:
+  - One rolling trace with 3 series: speed (cm/s), altitude (cm) and pitch, with live readouts.
+  - Vehicle card: battery ring, altitude, speed, temperature, pitch/roll/heading, ToF, barometer, vertical speed.
+  - Toggle with `[📈 DATA: ON/OFF]` or hotkey `P`.
 
-- **🗺️ Tactical Radar & Waypoint Mission Planner**:
-  - Bottom-left chamfered glass radar card with concentric range rings (`±2m`, `±3m`, `±5m`, `±10m`).
-  - Live breadcrumb flight trajectory trail.
-  - **Interactive Click-to-Add Waypoints**: Tap anywhere on the radar grid to plot flight paths (`WP1`, `WP2`, `WP3`...).
-  - `[EXEC]` triggers autonomous step-by-step navigation via Tello SDK motion commands.
+- **🗺️ Mission Planner (FLIGHT PLAN page) — no GPS, local metric frame**:
+  - Big map (grid in metres, anchored at Home) with geofence ring. **Click** = add waypoint, **drag** = move, **right-click** = delete, wheel = zoom, middle-drag = pan.
+  - ArduPilot-Mission-Planner-style **waypoint table**: `# · CMD · X · Y · ALT · PARAM · DIST · HDG`, editable cells, per-row command (`GO`, `ROTATE`, `HOVER`, `FLIP`, `LAND`).
+  - **Patterns**: Orbit, Square, Grid scan. Save/Load missions as JSON.
+  - Altitude profile plus estimated path length, time and battery use (rough planning numbers).
+  - `▶ START MISSION` runs the plan **from the PC** via Tello SDK motion commands (`takeoff`, `up/down`, `forward/back/left/right`, `cw/ccw`, `flip`, `land`), converted to the drone's body frame. It is not uploaded to the drone.
+  - The plan is locked while a mission is running; waypoints outside the geofence block the start.
+
+- **📡 Live Mission tracking (FLIGHT DATA page)**:
+  - Live map with the drone, FOV cone and breadcrumb trail. Waypoints show **✓ done / ▶ active / ○ pending**, completed path is green.
+  - Progress strip `H → LAND` with remaining distance and ETA; `SKIP WP` / `ABORT` controls (they take effect between commands).
+  - Position is **dead-reckoned** (IMU + vision velocity), so it drifts over time. Use `⌖ RESET HOME` to re-anchor.
 
 - **🎮 Dual-Input: Keyboard + Gamepad Controller Support**:
   - Full support for **PlayStation (PS4 / PS5 DualSense)**, **Nintendo Switch Pro Controller**, and **Xbox** controllers via `pygame`.
@@ -77,8 +85,11 @@ Designed with an **Ace Combat / Modern Fighter Jet Glass Cockpit** aesthetic, fe
 | `T` | Auto Takeoff |
 | `L` | Auto Land |
 | `Esc` | Emergency Engine Cutoff |
-| `P` | Toggle In-HUD Sparkline Plots |
+| `P` | Toggle Flight Data card |
 | `O` | Toggle AI Object / Person Tracking |
+| `M` | Switch FLIGHT DATA ↔ FLIGHT PLAN |
+
+Keys are not intercepted while typing in a field or navigating the waypoint table.
 
 ### Gamepad Mapping (Mode 2)
 | Axis / Button | Function |
@@ -145,17 +156,28 @@ TelloControlStation/
 │   │   ├── tello_sdk.py             # UDP Socket wrapper for Tello SDK 1.3
 │   │   ├── state_parser.py          # Real-time state string parser (DroneState)
 │   │   ├── video_stream.py          # H.264 UDP OpenCV decoder thread
-│   │   ├── mission_planner.py       # Autonomous waypoint navigation engine
+│   │   ├── mission.py               # Waypoint dataclass + path/time estimates (no Qt)
+│   │   ├── mission_planner.py       # Autonomous mission executor (TAKEOFF/GO/ROTATE/HOVER/FLIP/LAND)
+│   │   ├── pose.py                  # Dead-reckoned local position tracker
 │   │   └── object_detector.py       # Asynchronous YOLOv8 AI object & person detector
 │   ├── input/
 │   │   └── gamepad_handler.py       # Pygame joystick input handler (PS4/Switch/Xbox)
 │   ├── ui/
-│   │   ├── main_window.py           # Modern Glass Canopy MainWindow & Action Deck
+│   │   ├── main_window.py           # MainWindow: pages, drone/mission wiring, input
+│   │   ├── pages.py                 # FlyPage, PlanPage, LogsPage
+│   │   ├── mission_model.py         # Shared Qt mission model (edits, patterns, progress)
+│   │   ├── theme.py                 # Palette, fonts, global stylesheet
 │   │   └── widgets/
-│   │       ├── fighter_hud.py       # Ace Combat vector green HUD (Pitch ladder, tapes)
-│   │       ├── tactical_radar.py    # Waypoint radar card with trajectory trail
+│   │       ├── glass.py             # GlassPanel (translucent card)
+│   │       ├── topbar.py            # Tabs + status chips
+│   │       ├── camera_widget.py     # Video canvas + AI lock brackets
+│   │       ├── fighter_hud.py       # Fighter HUD (ladder, bank scale, scrolling tapes)
+│   │       ├── vehicle_panel.py     # Battery ring + telemetry cells
+│   │       ├── mission_map.py       # Metric mission map (edit + live progress)
+│   │       ├── waypoint_table.py    # Mission-Planner style waypoint grid
+│   │       ├── mission_widgets.py   # Progress strip, status list, altitude profile
 │   │       ├── flight_log.py        # Glass telemetry & comms log panel
-│   │       └── sparkline_widget.py  # In-HUD rolling micro-sparklines & oscilloscopes
+│   │       └── sparkline_widget.py  # Rolling flight-data trace
 │   └── utils/
 │       └── logger.py                # Thread-safe flight event logger
 ```

@@ -1,10 +1,9 @@
 """
 src/ui/widgets/sparkline_widget.py
-In-HUD Floating Micro-Sparkline & Oscilloscope Card.
+Rolling flight-data trace card (speed, altitude, attitude).
 
-Part of Concept 3: In-HUD Floating Micro-Sparklines.
-Renders real-time rolling telemetry wave graphs (Speed, Altitude, Attitude)
-with a translucent chamfered glass frame, phosphor vector curves, and Bahnschrift typography.
+Renders real-time telemetry curves with an optional translucent chamfered glass frame.
+Set framed=False to embed it inside another panel (e.g. the FLIGHT DATA glass card).
 """
 
 from collections import deque
@@ -16,13 +15,14 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import QWidget
 
+from src.ui import theme
 
-HUD_GREEN     = QColor(0x55, 0xff, 0x99)
-HUD_CYAN      = QColor(0x00, 0xf0, 0xff)
-HUD_AMBER     = QColor(0xff, 0xbb, 0x33)
-HUD_GLASS_BG  = QColor(0x06, 0x16, 0x0e, 0xb0)   # Translucent glass
-HUD_BORDER    = QColor(0x33, 0xbb, 0x66, 0x75)
-HUD_GRID      = QColor(0x18, 0x55, 0x30, 0x40)
+HUD_GREEN     = theme.ACCENT
+HUD_CYAN      = theme.ACCENT
+HUD_AMBER     = theme.WARN
+HUD_GLASS_BG  = theme.GLASS_BG                       # Translucent glass
+HUD_BORDER    = theme.GLASS_BORDER
+HUD_GRID      = QColor(0xff, 0xff, 0xff, 0x16)
 
 
 class SparklineSeries:
@@ -44,12 +44,17 @@ class SparklineCard(QWidget):
     Floating chamfered glass card displaying rolling telemetry sparklines.
     """
 
-    def __init__(self, title: str, parent=None, width: int = 180, height: int = 75):
+    def __init__(self, title: str, parent=None, width: Optional[int] = 180, height: Optional[int] = 75,
+                 framed: bool = True):
         super().__init__(parent)
-        self.setFixedSize(width, height)
+        if width and height:
+            self.setFixedSize(width, height)
+        else:
+            self.setMinimumHeight(60)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground, True)
 
+        self._framed = framed
         self._title = title
         self._series: List[SparklineSeries] = []
         self._curr_readouts: List[Tuple[str, str, QColor]] = []
@@ -90,19 +95,20 @@ class SparklineCard(QWidget):
         H = float(self.height())
         cut = 6.0
 
-        card_rect = QRectF(0.5, 0.5, W - 1.0, H - 1.0)
-        card_path = self._draw_chamfered(painter, card_rect, cut)
+        if self._framed:
+            card_rect = QRectF(0.5, 0.5, W - 1.0, H - 1.0)
+            card_path = self._draw_chamfered(painter, card_rect, cut)
 
-        # 1. Glass backdrop & frame
-        painter.fillPath(card_path, QBrush(HUD_GLASS_BG))
-        painter.setPen(QPen(HUD_BORDER, 1.0))
-        painter.drawPath(card_path)
+            # 1. Glass backdrop & frame
+            painter.fillPath(card_path, QBrush(HUD_GLASS_BG))
+            painter.setPen(QPen(HUD_BORDER, 1.0))
+            painter.drawPath(card_path)
 
-        # 2. Header title & active readouts
-        header_h = 18.0
-        painter.setFont(QFont("Bahnschrift", 8, QFont.Weight.DemiBold))
-        painter.setPen(QPen(HUD_GREEN, 1.0))
-        painter.drawText(QPointF(8, 13), self._title)
+            # 2. Header title
+            painter.setFont(QFont("Bahnschrift", 8, QFont.Weight.DemiBold))
+            painter.setPen(QPen(HUD_GREEN, 1.0))
+            painter.drawText(QPointF(8, 13), self._title)
+        header_h = 18.0 if self._framed else 14.0
 
         # Readouts in top-right
         rx = W - 8.0
@@ -112,10 +118,10 @@ class SparklineCard(QWidget):
             tw = painter.fontMetrics().horizontalAdvance(full_txt)
             rx -= tw
             painter.setPen(QPen(col, 1.0))
-            painter.drawText(QPointF(rx, 13), full_txt)
+            painter.drawText(QPointF(rx, 11 if not self._framed else 13), full_txt)
 
         # 3. Waveform Chart Grid Area
-        pad_x = 8.0
+        pad_x = 8.0 if self._framed else 2.0
         pad_y = header_h + 2.0
         plot_w = W - pad_x * 2.0
         plot_h = H - pad_y - 6.0
@@ -133,6 +139,7 @@ class SparklineCard(QWidget):
                 continue
 
             painter.setPen(QPen(s.color, 1.4))
+            painter.setBrush(Qt.BrushStyle.NoBrush)     # the previous series' head dot left a brush set
             path = QPainterPath()
 
             span = s.max_val - s.min_val if s.max_val != s.min_val else 1.0

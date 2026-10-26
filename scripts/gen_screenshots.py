@@ -90,8 +90,8 @@ def pix_to_pil(pix: QPixmap) -> Image.Image:
 
 
 def inject_telemetry(win, t: float, bat: int = 87):
-    """Push simulated sinusoidal telemetry to the HUD + sparklines."""
-    from PySide6.QtGui import QColor
+    """Push a simulated telemetry frame through the same path the real drone uses."""
+    from src.drone.state_parser import DroneState
 
     spd   = 40.0 + 30.0 * math.sin(t * 0.7)
     alt   = 120.0 + 60.0 * math.sin(t * 0.4)
@@ -99,40 +99,14 @@ def inject_telemetry(win, t: float, bat: int = 87):
     roll  =  8.0 * math.sin(t * 0.9 + 0.5)
     yaw   = 45.0 * math.sin(t * 0.3)
 
-    # HUD
-    win._hud.update_telemetry(
-        roll=roll, pitch=pitch, yaw=yaw,
-        alt=alt, speed=spd, tof=int(alt * 0.8)
-    )
-
-    # Sparklines (use update_values)
-    win._spark_spd.update_values(
-        [spd],
-        readouts=[("", f"{spd:.0f} cm/s", QColor(0x55, 0xff, 0x99))]
-    )
-    win._spark_alt.update_values(
-        [alt],
-        readouts=[("", f"{alt:.0f} cm", QColor(0x00, 0xf0, 0xff))]
-    )
-    yaw_w = (yaw + 180) % 360 - 180
-    win._spark_att.update_values(
-        [pitch, roll, yaw_w],
-        readouts=[
-            ("P", f"{pitch:+.0f}°", QColor(0x55, 0xff, 0x99)),
-            ("R", f"{roll:+.0f}°",  QColor(0x00, 0xf0, 0xff)),
-            ("Y", f"{int(yaw):03d}°", QColor(0xff, 0xbb, 0x33)),
-        ]
-    )
-
-    bat_now = max(10, bat - int(t * 0.5))
-    bat_color = "#55ff99" if bat_now > 30 else ("#ffbb33" if bat_now > 15 else "#ff4455")
-    win._stats_card.setText(
-        f"⚡ BAT: <span style='color:{bat_color};'>{bat_now}%</span> | "
-        f"TOF: <span style='color:#55ff99;'>{int(alt * 0.8)}cm</span> | "
-        f"TEMP: <span style='color:#55ff99;'>72°C</span>"
-    )
-    win._stats_card.adjustSize()
-    win._lbl_mode.setText("MODE: AIRBORNE")
+    x, y = win._pose.x, win._pose.y           # keep the injected demo position
+    win._on_state_received(DroneState(
+        pitch=pitch, roll=roll, yaw=int(yaw), vgx=0, vgy=int(spd), vgz=0,
+        templ=70, temph=74, tof=int(alt * 0.8), h=int(alt),
+        bat=max(10, bat - int(t * 0.5)), baro=-44.0,
+    ))
+    win._pose.x, win._pose.y = x, y
+    win._set_mode("AIRBORNE")
 
 
 def inject_ai_detections(win):
@@ -145,15 +119,25 @@ def inject_ai_detections(win):
 
 
 def inject_waypoints(win):
-    win._radar.reset_origin()
-    waypoints = [(60, -80), (-40, 120), (120, 50), (200, 200), (100, -150)]
-    for wp in waypoints:
-        win._radar._waypoints.append(wp)
-    # Fake spiral trajectory breadcrumb
-    for i in range(80):
-        a = i * 0.18
-        win._radar._trajectory.append((int(60 * math.cos(a)), int(60 * math.sin(a))))
-    win._radar.update()
+    """Demo mission, mid-flight: drone is on its way to waypoint 3."""
+    from src.drone.mission import Waypoint
+    from src.ui.mission_model import MissionModel
+
+    m = win._model
+    m.set_state(MissionModel.IDLE)
+    m.set_items([
+        Waypoint("TAKEOFF", 0, 0, 120), Waypoint("GO", 150, 200, 150, "50"),
+        Waypoint("GO", 350, 300, 180, "50"), Waypoint("ROTATE", 350, 300, 180, "90"),
+        Waypoint("GO", 300, -50, 150, "40"), Waypoint("GO", 100, -150, 120, "40"),
+        Waypoint("LAND", 0, 0, 0),
+    ])
+    win._pose.reset()
+    win._pose.trail[:] = [(150 * k / 20, 200 * k / 20) for k in range(21)] + \
+                         [(150 + 100 * k / 12, 200 + 50 * k / 12) for k in range(13)]
+    win._pose.x, win._pose.y, win._pose.yaw = 250.0, 250.0, 63.0
+    m.set_state(MissionModel.RUNNING)
+    m.set_target(2)
+    win._ui_tick()
 
 
 def main():
@@ -177,9 +161,7 @@ def main():
 
     # ── Shot 1: HUD Standby ──────────────────────────────────────────────────
     print("  Shot 1/6: HUD Standby ...")
-    win._ctrl_badge.setText("🎮 KEYBOARD PILOT // STANDBY")
-    win._stats_card.setText("BAT: --% | TOF: --cm | TEMP: --°C")
-    win._lbl_mode.setText("MODE: STANDBY")
+    win._set_mode("STANDBY")
     pump(25)
     saved_paths.append(save_png(grab_window(win), "01_hud_standby.png"))
 
@@ -187,7 +169,7 @@ def main():
     print("  Shot 2/6: Airborne HUD + Telemetry ...")
     if "city_aerial" in frames:
         win._cam.set_frame(frames["city_aerial"])
-    win._ctrl_badge.setText("🎮 PS4 DUALSHOCK // ARMED")
+    win._set_pad("🎮 PS4 DUALSHOCK", True)
     for i in range(90):
         inject_telemetry(win, i * 0.14)
     pump(30)
@@ -200,7 +182,6 @@ def main():
         pump(10)
     inject_ai_detections(win)
     inject_telemetry(win, 14.0)
-    win._btn_ai.setText("🎯 AI TRACK: ON")
     pump(25)
     saved_paths.append(save_png(grab_window(win), "03_ai_detection.png"))
 
@@ -215,13 +196,23 @@ def main():
     saved_paths.append(save_png(grab_window(win), "04_attitude_graphs.png"))
 
     # ── Shot 5: Tactical Radar + Waypoints ───────────────────────────────────
-    print("  Shot 5/6: Tactical Radar + Waypoints ...")
+    print("  Shot 5/6: Live mission map + progress ...")
     if "runway" in frames:
         win._cam.set_frame(frames["runway"])
     inject_waypoints(win)
     inject_telemetry(win, 22.0)
     pump(30)
     saved_paths.append(save_png(grab_window(win), "05_radar_waypoints.png"))
+
+    # ── Shot 5b: Flight Plan page ────────────────────────────────────────────
+    print("  Shot 5b: Flight Plan page ...")
+    win._model.set_state(win._model.IDLE)
+    win._goto(win.PLAN)
+    pump(20)
+    saved_paths.append(save_png(grab_window(win), "07_flight_plan.png"))
+    win._goto(win.FLY)
+    inject_waypoints(win)
+    pump(10)
 
     # ── Shot 6: Single Person Lock-On ────────────────────────────────────────
     print("  Shot 6/6: Person Lock-On ...")
